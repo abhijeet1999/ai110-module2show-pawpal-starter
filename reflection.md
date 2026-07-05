@@ -46,13 +46,25 @@ Yes. After reviewing the `pawpal_system.py` skeleton, a few gaps were fixed befo
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers:
+
+- **Available time** — the owner’s daily minute budget (`available_time_minutes`)
+- **Task priority** — high, medium, low (sorted first when building a plan)
+- **Completion status** — completed tasks are excluded
+- **Due date / frequency** — daily, weekly, and once tasks use `due_date` and `is_due_for_planning()`
+- **Scheduled time ranges** — used for sorting and conflict warnings after a plan is built
+
+Priority and available time matter most because the scenario is a busy owner trying to fit the most important care into limited time. Preferences are stored on `Owner` but not yet used in ranking. Conflict detection runs after scheduling and warns rather than blocking the plan.
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+One tradeoff is in **`detect_conflicts()`**: the scheduler checks for **overlapping time ranges** (start + duration), not just tasks with the exact same start time.
+
+A simpler approach would only flag tasks where `scheduled_time` is identical (for example, two tasks both at `09:00`). That is easier to read and slightly faster, but it would miss cases like a 30-minute walk starting at 09:00 conflicting with a 15-minute feeding starting at 09:10.
+
+I kept the overlap check because a pet owner cannot be in two places at once even when start times differ. The tradeoff is extra logic and pairwise comparisons (fine for small daily plans), in exchange for more realistic warnings. The scheduler still **warns only** — it does not auto-reschedule or crash — so the app stays usable while surfacing the problem.
+
+When reviewing AI suggestions to simplify this method, a more “Pythonic” version using `itertools.combinations` and `max(start_a, start_b) < min(end_a, end_b)` was shorter but harder to follow line-by-line. I kept the explicit nested loop because readability matters more here than saving a few lines.
 
 ---
 

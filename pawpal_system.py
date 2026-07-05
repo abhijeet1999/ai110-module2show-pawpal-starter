@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Dict, List, Optional, Tuple
 
 PRIORITY_RANK: Dict[str, int] = {"high": 3, "medium": 2, "low": 1}
@@ -19,6 +20,7 @@ class CareTask:
     frequency: str = "daily"
     completed: bool = False
     scheduled_time: Optional[str] = None
+    due_date: date = field(default_factory=date.today)
 
     @property
     def title(self) -> str:
@@ -41,6 +43,30 @@ class CareTask:
         """Mark this task as completed."""
         self.completed = True
 
+    def next_due_date(self, from_date: Optional[date] = None) -> Optional[date]:
+        """Calculate the next due date using timedelta (daily +1 day, weekly +7 days)."""
+        base_date = from_date or date.today()
+        if self.frequency == "daily":
+            return base_date + timedelta(days=1)
+        if self.frequency == "weekly":
+            return base_date + timedelta(days=7)
+        return None
+
+    def create_next_occurrence(self, from_date: Optional[date] = None) -> Optional[CareTask]:
+        """Create a fresh incomplete task copy scheduled for the next recurrence."""
+        next_due = self.next_due_date(from_date)
+        if next_due is None:
+            return None
+
+        return CareTask(
+            description=self.description,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            frequency=self.frequency,
+            completed=False,
+            due_date=next_due,
+        )
+
     def mark_incomplete(self) -> None:
         """Mark this task as not yet completed."""
         self.completed = False
@@ -49,13 +75,15 @@ class CareTask:
         """Return True if the task still needs to be done."""
         return not self.completed
 
-    def is_due_for_planning(self) -> bool:
-        """Return True if the task should be considered for today's plan."""
+    def is_due_for_planning(self, today: Optional[date] = None) -> bool:
+        """Return True when an incomplete task is due on or before the given date."""
         if self.completed:
             return False
-        if self.frequency not in VALID_FREQUENCIES:
+        if self.frequency == "once":
             return True
-        return True
+
+        check_date = today or date.today()
+        return self.due_date <= check_date
 
 
 @dataclass
@@ -82,6 +110,16 @@ class Pet:
     def get_pending_tasks(self) -> List[CareTask]:
         """Return tasks that are not yet completed."""
         return [task for task in self.tasks if task.is_pending()]
+
+    def mark_task_complete(
+        self, task: CareTask, today: Optional[date] = None
+    ) -> Optional[CareTask]:
+        """Complete a task and auto-create the next daily or weekly occurrence."""
+        task.mark_complete()
+        next_task = task.create_next_occurrence(today)
+        if next_task is not None:
+            self.add_task(next_task)
+        return next_task
 
 
 @dataclass
@@ -136,24 +174,32 @@ class Scheduler:
         self.planned_items: List[Tuple[Pet, CareTask]] = []
         self.explanations: List[str] = []
         self.skipped_count: int = 0
+        self.conflicts: List[str] = []
 
-    def generate_plan(self, pet: Pet, owner: Owner) -> List[CareTask]:
+    def generate_plan(self, pet: Pet, owner: Owner, today: Optional[date] = None) -> List[CareTask]:
         """Build a daily plan for one pet using the owner's time budget."""
         self._reset_plan_state()
         self._clear_scheduled_times(owner)
 
-        pending = [task for task in pet.get_pending_tasks() if task.is_due_for_planning()]
+        pending = [
+            task
+            for task in pet.get_pending_tasks()
+            if task.is_due_for_planning(today)
+        ]
         sorted_tasks = self.sort_tasks_by_priority(pending)
         fitted = self.fit_tasks_to_time(sorted_tasks, owner.get_available_time())
         self._assign_time_slots(fitted)
         self.skipped_count = len(pending) - len(fitted)
 
-        self.planned_tasks = fitted
-        self.planned_items = [(pet, task) for task in fitted]
+        self.planned_tasks = self.sort_by_time(fitted)
+        self.planned_items = [(pet, task) for task in self.planned_tasks]
+        self.conflicts = self.detect_conflicts(self.planned_items)
         self.explanations = self.explain_plan()
-        return fitted
+        return self.planned_tasks
 
-    def generate_plan_for_owner(self, owner: Owner) -> List[Tuple[Pet, CareTask]]:
+    def generate_plan_for_owner(
+        self, owner: Owner, today: Optional[date] = None
+    ) -> List[Tuple[Pet, CareTask]]:
         """Build one daily plan across all of an owner's pets."""
         self._reset_plan_state()
         self._clear_scheduled_times(owner)
@@ -161,7 +207,7 @@ class Scheduler:
         pending_items = [
             (pet, task)
             for pet, task in owner.get_all_pending_tasks()
-            if task.is_due_for_planning()
+            if task.is_due_for_planning(today)
         ]
         pending_tasks = [task for _, task in pending_items]
         sorted_tasks = self.sort_tasks_by_priority(pending_tasks)
@@ -171,16 +217,45 @@ class Scheduler:
 
         task_to_pet = {id(task): pet for pet, task in pending_items}
         self.planned_items = [(task_to_pet[id(task)], task) for task in fitted]
-        self.planned_tasks = fitted
+        self.planned_items = self.sort_items_by_time(self.planned_items)
+        self.planned_tasks = [task for _, task in self.planned_items]
+        self.conflicts = self.detect_conflicts(self.planned_items)
         self.explanations = self.explain_plan()
         return self.planned_items
 
     def sort_tasks_by_priority(self, tasks: List[CareTask]) -> List[CareTask]:
-        """Sort tasks so higher-priority items come first."""
+        """Sort tasks by priority rank first, then by shorter duration as a tiebreaker."""
         return sorted(
             tasks,
             key=lambda task: (-task.get_priority_rank(), task.duration_minutes),
         )
+
+    def sort_by_time(self, tasks: List[CareTask]) -> List[CareTask]:
+        """Sort tasks by scheduled_time (HH:MM) using a lambda key converted to minutes."""
+        return sorted(tasks, key=lambda task: self._time_sort_key(task))
+
+    def sort_items_by_time(
+        self, items: List[Tuple[Pet, CareTask]]
+    ) -> List[Tuple[Pet, CareTask]]:
+        """Sort scheduled pet-task pairs chronologically for display in the daily plan."""
+        return sorted(items, key=lambda item: self._time_sort_key(item[1]))
+
+    def filter_tasks(
+        self,
+        items: List[Tuple[Pet, CareTask]],
+        pet_name: Optional[str] = None,
+        completed: Optional[bool] = None,
+    ) -> List[Tuple[Pet, CareTask]]:
+        """Filter tasks by optional pet name and/or completion status without modifying data."""
+        filtered = items
+
+        if pet_name is not None:
+            filtered = [(pet, task) for pet, task in filtered if pet.name == pet_name]
+
+        if completed is not None:
+            filtered = [(pet, task) for pet, task in filtered if task.completed == completed]
+
+        return filtered
 
     def fit_tasks_to_time(self, tasks: List[CareTask], minutes: int) -> List[CareTask]:
         """Select tasks that fit within the available time."""
@@ -193,6 +268,29 @@ class Scheduler:
                 remaining -= task.duration_minutes
 
         return selected
+
+    def detect_conflicts(self, items: List[Tuple[Pet, CareTask]]) -> List[str]:
+        """Detect overlapping time ranges and return warning strings without raising errors."""
+        warnings: List[str] = []
+        scheduled: List[Tuple[Pet, CareTask, Tuple[int, int]]] = []
+
+        for pet, task in items:
+            time_range = self._task_time_range(task)
+            if time_range is not None:
+                scheduled.append((pet, task, time_range))
+
+        for index, (pet_a, task_a, (start_a, end_a)) in enumerate(scheduled):
+            for pet_b, task_b, (start_b, end_b) in scheduled[index + 1 :]:
+                if start_a < end_b and start_b < end_a:
+                    warnings.append(
+                        "Warning: "
+                        f"'{task_a.description}' for {pet_a.name} "
+                        f"({self._format_clock(start_a)}–{self._format_clock(end_a)}) overlaps with "
+                        f"'{task_b.description}' for {pet_b.name} "
+                        f"({self._format_clock(start_b)}–{self._format_clock(end_b)})."
+                    )
+
+        return warnings
 
     def explain_plan(self) -> List[str]:
         """Return human-readable reasons for the planned schedule."""
@@ -216,6 +314,7 @@ class Scheduler:
                 "in the owner's available time after priority sorting."
             )
 
+        explanations.extend(self.conflicts)
         return explanations
 
     def _reset_plan_state(self) -> None:
@@ -224,11 +323,30 @@ class Scheduler:
         self.planned_items = []
         self.explanations = []
         self.skipped_count = 0
+        self.conflicts = []
 
     def _clear_scheduled_times(self, owner: Owner) -> None:
         """Remove scheduled times from all of an owner's tasks before replanning."""
         for _, task in owner.get_all_tasks():
             task.clear_scheduled_time()
+
+    def _time_sort_key(self, task: CareTask) -> int:
+        """Convert HH:MM scheduled_time to minutes for sorting; unscheduled tasks go last."""
+        if not task.scheduled_time:
+            return 24 * 60
+        hours, minutes = task.scheduled_time.split(":")
+        return int(hours) * 60 + int(minutes)
+
+    def _task_time_range(self, task: CareTask) -> Optional[Tuple[int, int]]:
+        """Convert a task's scheduled start time and duration into minute-based bounds."""
+        if not task.scheduled_time:
+            return None
+        start = self._time_sort_key(task)
+        return (start, start + task.duration_minutes)
+
+    def _format_clock(self, minutes: int) -> str:
+        """Format minutes from midnight as HH:MM."""
+        return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
     def _assign_time_slots(
         self,

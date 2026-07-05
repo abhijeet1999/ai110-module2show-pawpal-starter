@@ -93,14 +93,14 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+PawPal+ includes lightweight algorithms for sorting, filtering, conflict detection, and recurring tasks. Run `python main.py` to see them in the CLI demo.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.sort_items_by_time()`, `Scheduler.sort_tasks_by_priority()` | Sort by scheduled time (HH:MM via lambda key) for display; sort by priority when building a plan |
+| Filtering | `Scheduler.filter_tasks()` | Filter `(Pet, CareTask)` pairs by pet name and/or completion status (`completed=True/False`) |
+| Conflict handling | `Scheduler.detect_conflicts()` | Compares overlapping start + duration ranges; returns warning messages instead of crashing |
+| Recurring tasks | `CareTask.next_due_date()`, `CareTask.create_next_occurrence()`, `Pet.mark_task_complete()`, `CareTask.is_due_for_planning()` | Daily tasks due tomorrow (+1 day); weekly tasks due in 7 days; one-time tasks do not repeat |
 
 ## 📸 Demo Walkthrough
 
