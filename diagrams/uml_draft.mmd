@@ -11,11 +11,13 @@ classDiagram
         +update_preferences(preferences) void
         +add_pet(pet) void
         +get_pets() List~Pet~
+        +get_pet(name) Pet
     }
 
     class Pet {
         +String name
         +String species
+        +String owner_name
         +List~CareTask~ tasks
         +add_task(task) void
         +remove_task(title) void
@@ -29,6 +31,7 @@ classDiagram
         +String scheduled_time
         +get_priority_rank() int
         +assign_time(time_slot) void
+        +clear_scheduled_time() void
     }
 
     class Scheduler {

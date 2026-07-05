@@ -14,19 +14,31 @@ PawPal+ is built around three essential things a pet owner should be able to do:
 
 **a. Initial design**
 
-The first UML draft uses four classes:
+The first UML draft uses four classes. Each class has one clear job, and together they support the three core user actions (set up profiles, manage tasks, generate a plan).
 
-- **Owner** — Stores the owner’s name, how much time they have available today, and optional preferences. Can own one or more pets. Responsible for supplying scheduling constraints and managing their pet list.
-- **Pet** — Stores the pet’s name and species, and holds the list of care tasks for that pet. Each pet belongs to one owner. Responsible for adding, removing, and listing tasks.
-- **CareTask** — Represents one care activity (walk, feeding, meds, etc.) with a title, duration, and priority. Can receive a scheduled time once the plan is built.
-- **Scheduler** — Takes a pet’s tasks and the owner’s time budget, sorts and filters tasks, assigns time slots, and produces explanations for the final plan.
+**Owner** holds who is using the app and what limits apply today. Its attributes are `name`, `available_time_minutes`, `preferences`, and a list of `pets`. Its methods manage that data: `get_available_time()` returns the time budget for scheduling, `update_preferences()` stores owner preferences for future filtering, `add_pet()` and `get_pets()` maintain the one-to-many owner–pet relationship, and `get_pet(name)` looks up a specific pet when the owner has more than one.
+
+**Pet** represents one animal under an owner. It stores `name`, `species`, `owner_name` (a link back to the owner), and a list of `tasks`. Its methods focus on task management: `add_task()`, `remove_task()`, and `get_tasks()`. Pets do not schedule themselves; they only collect the work that needs to be done.
+
+**CareTask** represents a single care activity (for example, a walk or feeding). It stores `title`, `duration_minutes`, `priority`, and an optional `scheduled_time` that is filled in later by the scheduler. Its methods are small but important: `get_priority_rank()` converts priority labels into a sortable number, `assign_time()` sets when the task happens, and `clear_scheduled_time()` removes an old time before a new plan is built.
+
+**Scheduler** is the planning engine. It is not a dataclass because it performs behavior rather than storing user profile data. It keeps `planned_tasks` and `explanations` from the last run. Its methods implement the scheduling pipeline: `generate_plan(pet, owner)` orchestrates the full flow, `sort_tasks_by_priority()` orders tasks, `fit_tasks_to_time()` chooses what fits in the available minutes, and `explain_plan()` returns reasons for the final schedule.
+
+Relationships: one **Owner** owns many **Pets**; each **Pet** has many **CareTasks**; the **Scheduler** reads from **Pet** and **Owner** and writes scheduled times onto **CareTask** objects. The scheduler builds one plan for one pet at a time, using the owner’s shared time budget.
 
 See `diagrams/uml_draft.mmd` for the full Mermaid class diagram.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yes. After reviewing the `pawpal_system.py` skeleton, a few gaps were fixed before moving on to implementation:
+
+1. **Added `Owner.get_pet(name)`** — With multiple pets per owner, the app needs a way to select one pet by name for scheduling. The original skeleton only listed all pets, which would become awkward in the UI and scheduler.
+
+2. **Added `owner_name` on `Pet` and clarified `add_pet()`** — The UML says each pet belongs to an owner, but the skeleton only stored pets on the owner side. Linking a pet back to its owner makes the relationship explicit and easier to validate later.
+
+3. **Added `CareTask.clear_scheduled_time()`** — The scheduler updates tasks in place. Without clearing old times, generating a new plan could leave stale scheduled times on tasks that were dropped from the latest plan.
+
+4. **Clarified `Scheduler.generate_plan()` behavior** — The docstring now states that a new plan should reset scheduler state and clear old scheduled times first. This avoids a logic bottleneck where repeated planning calls produce confusing or inconsistent results.
 
 ---
 

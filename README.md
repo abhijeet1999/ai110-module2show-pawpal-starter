@@ -44,14 +44,35 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+Run the demo script to verify scheduling logic in the terminal:
+
+```bash
+python main.py
+```
+
+Output from `main.py` (Owner: Jordan, 2 pets, 4 tasks, 90 minutes available):
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+PawPal+ | Today's Schedule
+------------------------------------------------------------------------
+Owner: Jordan
+Time available today: 90 minutes
+
+TIME     PET        TASK                     DURATION   PRIORITY
+------------------------------------------------------------------------
+08:00    Mochi      Feed breakfast           10 min     high    
+08:10    Mochi      Morning walk             30 min     high    
+08:40    Biscuit    Clean litter box         15 min     medium  
+08:55    Biscuit    Play session             20 min     low     
+------------------------------------------------------------------------
+Summary: 4 task(s) scheduled · 75 min used · 15 min remaining
+
+Why this plan:
+------------------------------------------------------------------------
+1. 08:00 — Feed breakfast for Mochi (10 min, high priority, daily): chosen because it is pending and ranked highly within today's 4-task plan.
+2. 08:10 — Morning walk for Mochi (30 min, high priority, daily): chosen because it is pending and ranked highly within today's 4-task plan.
+3. 08:40 — Clean litter box for Biscuit (15 min, medium priority, daily): chosen because it is pending and ranked highly within today's 4-task plan.
+4. 08:55 — Play session for Biscuit (20 min, low priority, weekly): chosen because it is pending and ranked highly within today's 4-task plan.
 ```
 
 ## 🧪 Testing PawPal+
