@@ -40,6 +40,8 @@ Yes. After reviewing the `pawpal_system.py` skeleton, a few gaps were fixed befo
 
 4. **Clarified `Scheduler.generate_plan()` behavior** — The docstring now states that a new plan should reset scheduler state and clear old scheduled times first. This avoids a logic bottleneck where repeated planning calls produce confusing or inconsistent results.
 
+The final architecture is documented in `diagrams/uml_final.mmd`, which adds recurring-task fields, sorting/filtering/conflict methods, cross-pet planning, and `Pet.mark_task_complete()`.
+
 ---
 
 ## 2. Scheduling Logic and Tradeoffs

@@ -1,0 +1,70 @@
+classDiagram
+    %% PawPal+ final system architecture — matches pawpal_system.py
+
+    class Owner {
+        +String name
+        +int available_time_minutes
+        +List~String~ preferences
+        +List~Pet~ pets
+        +get_available_time() int
+        +update_preferences(preferences) void
+        +add_pet(pet) void
+        +get_pets() List~Pet~
+        +get_pet(name) Pet
+        +get_all_tasks() List
+        +get_all_pending_tasks() List
+    }
+
+    class Pet {
+        +String name
+        +String species
+        +String owner_name
+        +List~CareTask~ tasks
+        +add_task(task) void
+        +remove_task(description) void
+        +get_tasks() List~CareTask~
+        +get_pending_tasks() List~CareTask~
+        +mark_task_complete(task, today) CareTask
+    }
+
+    class CareTask {
+        +String description
+        +int duration_minutes
+        +String priority
+        +String frequency
+        +bool completed
+        +String scheduled_time
+        +date due_date
+        +get_priority_rank() int
+        +assign_time(time_slot) void
+        +clear_scheduled_time() void
+        +mark_complete() void
+        +next_due_date(from_date) date
+        +create_next_occurrence(from_date) CareTask
+        +is_pending() bool
+        +is_due_for_planning(today) bool
+    }
+
+    class Scheduler {
+        +List~CareTask~ planned_tasks
+        +List planned_items
+        +List~String~ explanations
+        +int skipped_count
+        +List~String~ conflicts
+        +generate_plan(pet, owner, today) List~CareTask~
+        +generate_plan_for_owner(owner, today) List
+        +sort_tasks_by_priority(tasks) List~CareTask~
+        +sort_by_time(tasks) List~CareTask~
+        +sort_items_by_time(items) List
+        +filter_tasks(items, pet_name, completed) List
+        +fit_tasks_to_time(tasks, minutes) List~CareTask~
+        +detect_conflicts(items) List~String~
+        +explain_plan() List~String~
+    }
+
+    Owner "1" --> "1..*" Pet : owns
+    Pet "1" --> "0..*" CareTask : has
+    Pet ..> CareTask : creates on recurrence
+    Scheduler ..> Owner : reads pets, time, pending tasks
+    Scheduler ..> Pet : reads tasks
+    Scheduler ..> CareTask : assigns times and checks conflicts
