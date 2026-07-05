@@ -75,21 +75,39 @@ Why this plan:
 4. 08:55 — Play session for Biscuit (20 min, low priority, weekly): chosen because it is pending and ranked highly within today's 4-task plan.
 ```
 
-## 🧪 Testing PawPal+
+## Testing PawPal+
+
+Run the automated test suite from the project root:
 
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+### What the tests cover
+
+The suite in `tests/test_pawpal.py` verifies core PawPal+ behavior:
+
+- **Task lifecycle** — completing a task updates its status; adding a task increases a pet's task count
+- **Sorting** — `Scheduler.sort_by_time()` returns tasks in chronological order; generated plans stay time-sorted
+- **Recurrence** — completing a daily task creates a new task due the next day; weekly tasks recur in 7 days; one-time tasks do not repeat
+- **Conflict detection** — `Scheduler.detect_conflicts()` flags duplicate/overlapping scheduled times with warning messages
+
+### Sample test output
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/abhijeetcherungottil/Desktop/ai110-module2show-pawpal-starter
+collected 8 items
+
+tests/test_pawpal.py ........                                            [100%]
+
+============================== 8 passed in 0.02s ===============================
 ```
+
+### Confidence level
+
+**★★★★☆ (4/5)** — Core scheduling, sorting, recurrence, and conflict detection are covered by passing tests and the CLI demo. Confidence would reach 5/5 with additional edge-case tests (empty pets, zero time budget, partial time overlaps, and UI integration tests).
 
 ## 📐 Smarter Scheduling
 
