@@ -261,7 +261,8 @@ The suite in `tests/test_pawpal.py` verifies:
 - **Recurrence** — completing a daily task creates a new task due the next day; weekly tasks recur in 7 days; one-time tasks do not repeat
 - **Conflict detection** — `Scheduler.detect_conflicts()` flags duplicate/overlapping scheduled times with warning messages
 - **Next available slot** — `Scheduler.find_next_available_slot()` finds the earliest non-overlapping gap
-- **Persistence** — `Owner.save_to_json()` / `Owner.load_from_json()` round-trip owner data through JSON
+- **Edge cases** — empty owner (no pets), zero-minute time budget, partial time overlaps, future weekly due dates
+- **UI integration** — `task_rows()`, `plan_summary()`, and app persistence helpers (`tests/test_app_integration.py`)
 
 ### Sample test output
 
@@ -269,13 +270,14 @@ The suite in `tests/test_pawpal.py` verifies:
 ============================= test session starts ==============================
 platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
 rootdir: /Users/abhijeetcherungottil/Desktop/ai110-module2show-pawpal-starter
-collected 13 items
+collected 21 items
 
-tests/test_pawpal.py .............                                         [100%]
+tests/test_pawpal.py .................                                     [ 85%]
+tests/test_app_integration.py ....                                         [100%]
 
-============================== 13 passed in 0.05s ===============================
+============================== 21 passed in 0.06s ===============================
 ```
 
 ### Confidence level
 
-**★★★★☆ (4/5)** — Core scheduling, sorting, recurrence, and conflict detection are covered by passing tests and the CLI demo. Confidence would reach 5/5 with additional edge-case tests (empty pets, zero time budget, partial time overlaps, and UI integration tests).
+**★★★★★ (5/5)** — Core scheduling, edge cases, and UI helper integration are covered by 21 passing tests, the CLI demo, and manual Streamlit verification.

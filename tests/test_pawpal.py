@@ -223,3 +223,66 @@ def test_save_and_load_owner_roundtrip(tmp_path):
     assert task.description == "Morning walk"
     assert task.priority == "high"
     assert task.due_date == date(2026, 7, 4)
+
+
+def test_generate_plan_with_no_pets_returns_empty():
+    """An owner with no pets should get an empty plan without errors."""
+    owner = Owner(name="Jordan", available_time_minutes=60)
+    scheduler = Scheduler()
+
+    plan = scheduler.generate_plan_for_owner(owner)
+
+    assert plan == []
+    assert scheduler.planned_items == []
+    assert "No tasks were scheduled" in scheduler.explain_plan()[0]
+
+
+def test_zero_time_budget_schedules_nothing():
+    """A zero-minute budget should schedule no tasks and report skipped work."""
+    owner = Owner(name="Jordan", available_time_minutes=0)
+    pet = Pet(name="Mochi", species="dog")
+    owner.add_pet(pet)
+    pet.add_task(CareTask("Morning walk", 30, priority="high"))
+
+    scheduler = Scheduler()
+    plan = scheduler.generate_plan_for_owner(owner)
+
+    assert plan == []
+    assert scheduler.skipped_count == 1
+
+
+def test_conflict_detection_flags_partial_overlap():
+    """detect_conflicts() should warn when start times differ but ranges overlap."""
+    scheduler = Scheduler()
+    mochi = Pet(name="Mochi", species="dog")
+
+    walk = CareTask("Morning walk", 30, scheduled_time="09:00")
+    snack = CareTask("Mid-walk snack", 15, scheduled_time="09:10")
+
+    warnings = scheduler.detect_conflicts([(mochi, walk), (mochi, snack)])
+
+    assert len(warnings) == 1
+    assert "Morning walk" in warnings[0]
+    assert "Mid-walk snack" in warnings[0]
+
+
+def test_future_weekly_task_excluded_from_plan():
+    """Weekly tasks due in the future should not appear in today's plan."""
+    owner = Owner(name="Jordan", available_time_minutes=120)
+    pet = Pet(name="Mochi", species="dog")
+    owner.add_pet(pet)
+    today = date(2026, 7, 4)
+    pet.add_task(
+        CareTask(
+            description="Deep clean litter box",
+            duration_minutes=20,
+            frequency="weekly",
+            due_date=today + timedelta(days=14),
+        )
+    )
+
+    scheduler = Scheduler()
+    plan = scheduler.generate_plan_for_owner(owner, today=today)
+
+    assert plan == []
+    assert scheduler.skipped_count == 0

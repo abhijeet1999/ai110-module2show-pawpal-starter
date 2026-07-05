@@ -127,17 +127,9 @@ These tests target the behaviors that would embarrass the app if wrong: wrong so
 
 **b. Confidence**
 
-**Confidence: ★★★★☆ (4 out of 5)**
+**Confidence: ★★★★★ (5 out of 5)**
 
-I am confident in the core scheduling pipeline — priority sorting, time-budget fitting, chronological display, recurrence, and conflict warnings — because every path is covered by passing tests and confirmed in both `main.py` and the Streamlit UI.
-
-I would not claim 5/5 yet. If I had more time, I would add tests for:
-
-- **Zero-minute time budget** — planner should schedule nothing and report clearly
-- **Empty owner (no pets, no tasks)** — no crashes, helpful messages
-- **Partial time overlaps** — a 30-minute task at 09:00 vs. a 15-minute task at 09:10 (overlap logic, not just identical start times)
-- **Due-date edge cases** — weekly tasks not due today should stay out of the plan
-- **UI integration** — session state survives add/complete/generate flows (harder to automate, but valuable)
+Core scheduling, sorting, recurrence, and conflict detection are covered by passing tests and confirmed in both `main.py` and the Streamlit UI. Additional edge-case tests now verify empty owners, zero-minute budgets, partial time overlaps, future due dates, and UI helper integration (`task_rows`, `plan_summary`, persistence helpers).
 
 ---
 
@@ -155,7 +147,7 @@ On a second iteration I would:
 
 1. **Use owner preferences in ranking** — `Owner.preferences` is stored but not yet applied when sorting tasks.
 2. **Auto-reschedule or suggest fixes for conflicts** — today the app warns only; a smarter version could shift lower-priority tasks.
-3. **Stronger UI tests** — pytest covers the backend well, but Streamlit flows are still manually checked.
+3. **Stronger UI tests** — added pytest coverage for `task_rows`, `plan_summary`, and save/load helpers; full Streamlit click-path tests would still be a future improvement.
 4. **Tighter recurrence UX** — show "next due" more prominently when a daily task is completed.
 
 **c. Key takeaway — lead architect with AI**
