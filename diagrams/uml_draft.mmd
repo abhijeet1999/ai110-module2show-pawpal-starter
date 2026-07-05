@@ -1,0 +1,47 @@
+classDiagram
+    %% PawPal+ initial design — Phase 3 working draft
+    %% Four core classes mapped to: profile setup, task management, daily planning
+
+    class Owner {
+        +String name
+        +int available_time_minutes
+        +List~String~ preferences
+        +List~Pet~ pets
+        +get_available_time() int
+        +update_preferences(preferences) void
+        +add_pet(pet) void
+        +get_pets() List~Pet~
+    }
+
+    class Pet {
+        +String name
+        +String species
+        +List~CareTask~ tasks
+        +add_task(task) void
+        +remove_task(title) void
+        +get_tasks() List~CareTask~
+    }
+
+    class CareTask {
+        +String title
+        +int duration_minutes
+        +String priority
+        +String scheduled_time
+        +get_priority_rank() int
+        +assign_time(time_slot) void
+    }
+
+    class Scheduler {
+        +List~CareTask~ planned_tasks
+        +List~String~ explanations
+        +generate_plan(pet, owner) List~CareTask~
+        +sort_tasks_by_priority(tasks) List~CareTask~
+        +fit_tasks_to_time(tasks, minutes) List~CareTask~
+        +explain_plan() List~String~
+    }
+
+    Owner "1" --> "1..*" Pet : owns
+    Pet "1" --> "0..*" CareTask : has
+    Scheduler ..> Pet : reads tasks from
+    Scheduler ..> Owner : reads time from
+    Scheduler ..> CareTask : schedules

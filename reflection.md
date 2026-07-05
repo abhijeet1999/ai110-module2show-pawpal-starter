@@ -2,10 +2,26 @@
 
 ## 1. System Design
 
+**Core user actions**
+
+PawPal+ is built around three essential things a pet owner should be able to do:
+
+1. **Set up their pet profile.** The user enters basic information about themselves and their pet—such as the owner’s name, the pet’s name, and species—so the app knows who the plan is for and can tailor care suggestions accordingly.
+
+2. **Add and manage care tasks.** The user can create tasks like walks, feeding, medication, or grooming. Each task includes at least how long it takes and how important it is, so the system has enough detail to prioritize what matters most when time is limited.
+
+3. **Generate and review today’s plan.** The user asks PawPal+ to build a daily schedule from their tasks and constraints (for example, how much time they have available). The app shows which tasks fit into the day, when they happen, and ideally explains why those choices were made.
+
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+The first UML draft uses four classes:
+
+- **Owner** — Stores the owner’s name, how much time they have available today, and optional preferences. Can own one or more pets. Responsible for supplying scheduling constraints and managing their pet list.
+- **Pet** — Stores the pet’s name and species, and holds the list of care tasks for that pet. Each pet belongs to one owner. Responsible for adding, removing, and listing tasks.
+- **CareTask** — Represents one care activity (walk, feeding, meds, etc.) with a title, duration, and priority. Can receive a scheduled time once the plan is built.
+- **Scheduler** — Takes a pet’s tasks and the owner’s time budget, sorts and filters tasks, assigns time slots, and produces explanations for the final plan.
+
+See `diagrams/uml_draft.mmd` for the full Mermaid class diagram.
 
 **b. Design changes**
 
