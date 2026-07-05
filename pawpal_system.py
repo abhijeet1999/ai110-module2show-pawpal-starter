@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 PRIORITY_RANK: Dict[str, int] = {"high": 3, "medium": 2, "low": 1}
+VALID_PRIORITIES = ("high", "medium", "low")
 VALID_FREQUENCIES = ("daily", "weekly", "once")
 
 
 @dataclass
 class CareTask:
-    """A single care activity for a pet."""
+    """A single care activity for a pet.
+
+    Priority must be one of: ``high``, ``medium``, or ``low`` (see ``VALID_PRIORITIES``).
+    """
 
     description: str
     duration_minutes: int
@@ -28,8 +34,13 @@ class CareTask:
         return self.description
 
     def get_priority_rank(self) -> int:
-        """Return a numeric rank for sorting tasks by priority."""
+        """Return a numeric rank for sorting tasks by priority (High=3, Medium=2, Low=1)."""
         return PRIORITY_RANK.get(self.priority.lower(), 0)
+
+    def normalize_priority(self) -> None:
+        """Coerce unknown priority labels to medium."""
+        if self.priority.lower() not in PRIORITY_RANK:
+            self.priority = "medium"
 
     def assign_time(self, time_slot: str) -> None:
         """Set the scheduled time for this task."""
@@ -164,6 +175,21 @@ class Owner:
         """Return every incomplete task across all of this owner's pets."""
         return [(pet, task) for pet in self.pets for task in pet.get_pending_tasks()]
 
+    def save_to_json(self, filepath: str = "data.json") -> None:
+        """Serialize this owner, pets, and tasks to a JSON file."""
+        path = Path(filepath)
+        path.write_text(
+            json.dumps(_owner_to_dict(self), indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def load_from_json(filepath: str = "data.json") -> Owner:
+        """Rebuild an Owner graph from a JSON file created by save_to_json()."""
+        path = Path(filepath)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return _owner_from_dict(data)
+
 
 class Scheduler:
     """Plans and organizes care tasks using owner time and task priority."""
@@ -230,6 +256,13 @@ class Scheduler:
             key=lambda task: (-task.get_priority_rank(), task.duration_minutes),
         )
 
+    def sort_tasks_by_priority_then_time(self, tasks: List[CareTask]) -> List[CareTask]:
+        """Sort tasks by priority (High before Low), then by scheduled time (earliest first)."""
+        return sorted(
+            tasks,
+            key=lambda task: (-task.get_priority_rank(), self._time_sort_key(task)),
+        )
+
     def sort_by_time(self, tasks: List[CareTask]) -> List[CareTask]:
         """Sort tasks by scheduled_time (HH:MM) using a lambda key converted to minutes."""
         return sorted(tasks, key=lambda task: self._time_sort_key(task))
@@ -239,6 +272,15 @@ class Scheduler:
     ) -> List[Tuple[Pet, CareTask]]:
         """Sort scheduled pet-task pairs chronologically for display in the daily plan."""
         return sorted(items, key=lambda item: self._time_sort_key(item[1]))
+
+    def sort_items_by_priority_then_time(
+        self, items: List[Tuple[Pet, CareTask]]
+    ) -> List[Tuple[Pet, CareTask]]:
+        """Sort pet-task pairs by priority first, then by scheduled time."""
+        return sorted(
+            items,
+            key=lambda item: (-item[1].get_priority_rank(), self._time_sort_key(item[1])),
+        )
 
     def filter_tasks(
         self,
@@ -291,6 +333,35 @@ class Scheduler:
                     )
 
         return warnings
+
+    def find_next_available_slot(
+        self,
+        items: List[Tuple[Pet, CareTask]],
+        duration_minutes: int,
+        start_hour: int = 8,
+        end_hour: int = 22,
+    ) -> Optional[str]:
+        """Return the earliest HH:MM start time where a task fits without overlapping."""
+        busy_ranges: List[Tuple[int, int]] = []
+        for _, task in items:
+            time_range = self._task_time_range(task)
+            if time_range is not None:
+                busy_ranges.append(time_range)
+
+        busy_ranges.sort(key=lambda time_range: time_range[0])
+
+        cursor = start_hour * 60
+        day_end = end_hour * 60
+
+        for start, end in busy_ranges:
+            if cursor + duration_minutes <= start:
+                return self._format_clock(cursor)
+            cursor = max(cursor, end)
+
+        if cursor + duration_minutes <= day_end:
+            return self._format_clock(cursor)
+
+        return None
 
     def explain_plan(self) -> List[str]:
         """Return human-readable reasons for the planned schedule."""
@@ -361,6 +432,76 @@ class Scheduler:
             minutes = current_minutes % 60
             task.assign_time(f"{hours:02d}:{minutes:02d}")
             current_minutes += task.duration_minutes
+
+
+def _task_to_dict(task: CareTask) -> Dict[str, Any]:
+    """Convert a CareTask to a JSON-friendly dictionary."""
+    return {
+        "description": task.description,
+        "duration_minutes": task.duration_minutes,
+        "priority": task.priority,
+        "frequency": task.frequency,
+        "completed": task.completed,
+        "scheduled_time": task.scheduled_time,
+        "due_date": task.due_date.isoformat(),
+    }
+
+
+def _task_from_dict(data: Dict[str, Any]) -> CareTask:
+    """Rebuild a CareTask from a dictionary produced by _task_to_dict()."""
+    return CareTask(
+        description=data["description"],
+        duration_minutes=data["duration_minutes"],
+        priority=data.get("priority", "medium"),
+        frequency=data.get("frequency", "daily"),
+        completed=data.get("completed", False),
+        scheduled_time=data.get("scheduled_time"),
+        due_date=date.fromisoformat(data["due_date"]),
+    )
+
+
+def _pet_to_dict(pet: Pet) -> Dict[str, Any]:
+    """Convert a Pet and its tasks to a JSON-friendly dictionary."""
+    return {
+        "name": pet.name,
+        "species": pet.species,
+        "owner_name": pet.owner_name,
+        "tasks": [_task_to_dict(task) for task in pet.tasks],
+    }
+
+
+def _pet_from_dict(data: Dict[str, Any]) -> Pet:
+    """Rebuild a Pet from a dictionary produced by _pet_to_dict()."""
+    pet = Pet(
+        name=data["name"],
+        species=data["species"],
+        owner_name=data.get("owner_name"),
+        tasks=[_task_from_dict(task_data) for task_data in data.get("tasks", [])],
+    )
+    return pet
+
+
+def _owner_to_dict(owner: Owner) -> Dict[str, Any]:
+    """Convert an Owner graph to a JSON-friendly dictionary."""
+    return {
+        "name": owner.name,
+        "available_time_minutes": owner.available_time_minutes,
+        "preferences": list(owner.preferences),
+        "pets": [_pet_to_dict(pet) for pet in owner.pets],
+    }
+
+
+def _owner_from_dict(data: Dict[str, Any]) -> Owner:
+    """Rebuild an Owner graph from a dictionary produced by _owner_to_dict()."""
+    owner = Owner(
+        name=data["name"],
+        available_time_minutes=data["available_time_minutes"],
+        preferences=list(data.get("preferences", [])),
+        pets=[_pet_from_dict(pet_data) for pet_data in data.get("pets", [])],
+    )
+    for pet in owner.pets:
+        pet.owner_name = owner.name
+    return owner
 
 
 # Alias matching common project terminology.

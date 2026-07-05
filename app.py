@@ -1,11 +1,12 @@
 import streamlit as st
 
+from pathlib import Path
 from typing import Optional
 
 from pawpal_system import CareTask, Owner, Pet, Scheduler
+from cli_format import PRIORITY_EMOJI, SPECIES_EMOJI, task_type_emoji
 
-SPECIES_EMOJI = {"dog": "🐕", "cat": "🐈", "other": "🐾"}
-PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+DATA_FILE = "data.json"
 
 
 def inject_styles() -> None:
@@ -79,7 +80,7 @@ def task_rows(items: list[tuple[Pet, CareTask]]) -> list[dict]:
         {
             "Time": task.scheduled_time or "—",
             "Pet": f"{SPECIES_EMOJI.get(pet.species, '🐾')} {pet.name}",
-            "Task": task.description,
+            "Task": f"{task_type_emoji(task.description)} {task.description}",
             "Min": task.duration_minutes,
             "Priority": f"{PRIORITY_EMOJI.get(task.priority, '⚪')} {task.priority}",
             "Frequency": task.frequency,
@@ -109,6 +110,18 @@ def get_active_pet(owner: Owner) -> Optional[Pet]:
     return owner.get_pet(st.session_state.active_pet_name)
 
 
+def save_owner_state(owner: Owner) -> None:
+    """Persist the current owner, pets, and tasks to data.json."""
+    owner.save_to_json(DATA_FILE)
+
+
+def load_saved_owner() -> Optional[Owner]:
+    """Load owner data from disk when data.json exists."""
+    if Path(DATA_FILE).exists():
+        return Owner.load_from_json(DATA_FILE)
+    return None
+
+
 st.set_page_config(
     page_title="PawPal+",
     page_icon="🐾",
@@ -119,7 +132,9 @@ st.set_page_config(
 inject_styles()
 
 if "owner" not in st.session_state:
-    st.session_state.owner = Owner(name="Jordan", available_time_minutes=90)
+    st.session_state.owner = load_saved_owner() or Owner(
+        name="Jordan", available_time_minutes=90
+    )
 if "scheduler" not in st.session_state:
     st.session_state.scheduler = Scheduler()
 if "active_pet_name" not in st.session_state:
@@ -175,6 +190,7 @@ with st.sidebar:
             else:
                 owner.add_pet(Pet(name=cleaned_name, species=new_species))
                 st.session_state.active_pet_name = cleaned_name
+                save_owner_state(owner)
                 st.success(f"Added {cleaned_name}!")
                 st.rerun()
 
@@ -187,6 +203,7 @@ with st.sidebar:
         else:
             plan = scheduler.generate_plan_for_owner(owner)
             st.session_state.last_plan = plan
+            save_owner_state(owner)
             if not plan:
                 st.warning("No tasks fit in your time budget.")
             else:
@@ -251,6 +268,7 @@ else:
                             frequency=frequency,
                         )
                     )
+                    save_owner_state(owner)
                     st.success(f"Added task for {active_pet.name}.")
                     st.rerun()
 
@@ -303,6 +321,7 @@ else:
                         idx = complete_labels.index(complete_choice)
                         chosen_task = pending_items[idx][1]
                         next_task = active_pet.mark_task_complete(chosen_task)
+                        save_owner_state(owner)
                         st.success(f"Completed {chosen_task.description}.")
                         if next_task:
                             st.info(f"Next due: {next_task.due_date}")
@@ -335,6 +354,15 @@ else:
                 st.error("Schedule conflict detected")
                 for warning in scheduler.conflicts:
                     st.warning(warning)
+                next_slot = scheduler.find_next_available_slot(
+                    sorted_plan,
+                    duration_minutes=20,
+                )
+                if next_slot:
+                    st.info(
+                        f"Next available 20-minute slot with no overlap: **{next_slot}** "
+                        "(use this when manually rescheduling a task)."
+                    )
                 st.markdown(
                     "Try removing a lower-priority task, increasing your available time in the sidebar, "
                     "then regenerate the plan."
@@ -390,3 +418,6 @@ else:
                 use_container_width=True,
                 hide_index=True,
             )
+
+# Persist owner profile, pets, and tasks after each interaction.
+save_owner_state(owner)
